@@ -1,0 +1,115 @@
+# ====================================================================
+# ZWERIZ SYNTAX & ENGINE CAPABILITY SHOWCASE
+# 2D Particle Physics & Collision Simulation
+# ====================================================================
+
+print("=========================================")
+print("      ZWERIZ PARTICLE PHYSICS ENGINE     ")
+print("=========================================")
+
+# ---------------------------------------------------------
+# 1. CPU Side: Classes, Dictionaries, and Functions
+# ---------------------------------------------------------
+
+# Zweriz 'class' keyword provides clean syntactic sugar for dictionaries
+class Environment {
+    gravity = -9.81
+    bounce_factor = -0.75
+    time_step = 0.016     # Roughly 60 FPS
+    floor_level = 0.0
+}
+
+# Instantiate the environment dictionary
+env = Environment()
+
+# A standalone function to validate the physics state
+fn validate_state(lowest_particle, floor) {
+    if lowest_particle < floor {
+        # Custom throws trigger the Zweriz VM's catch stack
+        throw "Physics instability: A particle clipped through the floor!"
+    }
+    return true
+}
+
+# ---------------------------------------------------------
+# 2. VRAM Initialization
+# ---------------------------------------------------------
+num_particles = 10000
+print(f"Initializing {num_particles} particles...")
+
+# Allocate 10,000 particles 
+X = ones(num_particles) * 5.0
+Y = ones(num_particles) * 50.0  # Drop them from height 50
+VX = ones(num_particles) * 2.0  # Give them sideways drift
+VY = zeros(num_particles)
+
+# Extract config to raw identifiers for the GPU transpiler
+g = env.gravity
+dt = env.time_step
+bf = env.bounce_factor
+floor = env.floor_level
+
+print("\n--- Starting Simulation Loop ---")
+
+# ---------------------------------------------------------
+# 3. The Main Loop (GPU / CPU Seamless Interop)
+# ---------------------------------------------------------
+try {
+    for step = 0 to 100 {
+        
+        # --- VRAM EXECUTION ---
+        # We use Double Buffering (next_Y) to prevent the compiler from 
+        # dropping read/write overlapped variables from __in_ptrs!
+        GPU {
+            # Apply gravity to velocity
+            updated_VY = VY + (g * dt)
+            
+            # Apply velocity to position
+            next_X = X + (VX * dt)
+            updated_Y = Y + (updated_VY * dt)
+            
+            # Collision Detection (Array Boolean Logic)
+            hit_floor = updated_Y < floor
+            
+            # Rebound Velocity
+            bounced_VY = updated_VY * bf
+            
+            # Blend acts as a high-speed GPU if/else: blend(mask, true_val, false_val)
+            next_VY = blend(hit_floor, bounced_VY, updated_VY)
+            
+            # Snap Y position to floor so they don't sink
+            next_Y = blend(hit_floor, floor, updated_Y)
+        }
+        
+        # --- CPU STATE SWAP ---
+        # Very fast VM pointer assignment (Opcode::Move)
+        X = next_X
+        Y = next_Y
+        VY = next_VY
+        
+        # --- CPU REDUCTIONS ---
+        # The VM lazily pulls Y back to RAM to calculate these metrics
+        avg_height = mean(Y)
+        max_height = max(Y)
+        min_height = min(Y)
+        
+        # Print status every 20 frames using Zweriz F-Strings
+        if step % 20.0 == 0.0 {
+            print(f"Frame {step} | Max Height: {max_height} | Avg Height: {avg_height}")
+        }
+        
+        # Pass the reduced CPU value into our custom validation function
+        validate_state(min_height, env.floor_level)
+    }
+
+    print("\n✅ Simulation completed successfully.")
+    print(f"Final Average Height: {mean(Y)}")
+
+} catch (err) {
+    print(f"\n❌ Simulation Halted!")
+    print(f"Error Details: {err}")
+}
+
+print("=========================================")
+print("            EXECUTION ENDED              ")
+print("=========================================")
