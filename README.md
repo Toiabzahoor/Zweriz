@@ -1,14 +1,16 @@
-# Zweriz (v0.1)
-A fast, dynamic programming language with native, seamless GPU acceleration.
+# Zweriz (v0.2.0)
+A fast, dynamic programming language with native, seamless GPU acceleration—now with built-in Deep Learning and Networking.
 
-Zweriz is a modern scripting language designed to make high-performance computing as easy as writing a simple script. Whether you are building a quick math tool or simulating millions of particles, Zweriz writes like a standard dynamic language but gives you the power to offload heavy math directly to your NVIDIA GPU with a single block of code.
+Zweriz is a modern scripting language designed to make high-performance computing as easy as writing a simple script. Whether you are building a quick math tool, simulating millions of particles, or training a neural network, Zweriz writes like a standard dynamic language but gives you the power to offload heavy math directly to your NVIDIA GPU with a single block of code.
 
 ## A Note from the Creator
-Hi! I'm the solo teenage developer behind Zweriz. This is the Initial v0.1 Release. Because I am building this on my own and don't have the budget to hire a QA team, there are bound to be undiscovered bugs and edge cases out there in the wild. I am releasing the compiled binary so people can play with it, test it, and push it to its limits.
+Hi! I'm the solo teenage developer behind Zweriz. Welcome to the v0.2.0 release! A massive thank you to everyone who tested the initial v0.1 release and reported bugs. 
 
-**Note:** The Interactive REPL is currently in its early stages and has some known syntax parsing quirks compared to running a `.zw` file directly. I apologize for any inconvenience while I iron those out!
+In this version, I have massively expanded Zweriz's capabilities by adding native Neural Network support, a networking module, and a brand new VS Code extension for syntax highlighting. Because I am building this on my own and don't have the budget to hire a QA team, there are bound to be undiscovered edge cases. I am releasing the compiled binary so people can play with it, test it, and push it to its limits.
 
-If you are interested in languages, compilers, or GPU tech, I would massively appreciate volunteer bug hunters! Try to break it, and let me know what you find so we can make v0.2 even better.
+**Note:** The Interactive REPL is currently in its early stages and has some known syntax parsing quirks compared to running a `.zw` file directly. 
+
+If you are interested in languages, compilers, or GPU tech, I would massively appreciate volunteer bug hunters! Try to break it, and let me know what you find so we can make v0.3 even better.
 
 ## Getting Started
 Currently, Zweriz is distributed as two standalone compiled binaries:
@@ -32,6 +34,9 @@ If you are running an untrusted script, use the `--safe` flag. This disables dan
 ```bash
 ./zweriz_cuda --safe my_script.zw
 ```
+
+### New in v0.2: VS Code Extension
+Zweriz now has official editor support! You can install the Zweriz Language Support extension (`zweriz.vsix`) to get full syntax highlighting and snippets for `.zw` files. 
 
 ## Language Syntax Guide
 Zweriz uses a clean, brace-based syntax that feels familiar if you have used languages like JavaScript, Python, or Rust.
@@ -84,27 +89,6 @@ while power > 0 {
 }
 ```
 
-### Functions
-```python
-fn calculate_area(width, height) {
-    return width * height
-}
-
-area = calculate_area(10, 5)
-```
-
-### Error Handling
-```python
-try {
-    # Risky code
-    if missing_data {
-        throw "Data is missing!"
-    }
-} catch (err) {
-    print(f"Caught an error: {err}")
-}
-```
-
 ## The Magic: GPU { ... } Blocks
 The defining feature of Zweriz is the `GPU {}` block. You do not need to know CUDA, C++, or memory management to use your graphics card. You just wrap your heavy math in a GPU block, and the Zweriz engine automatically accelerates it.
 
@@ -142,25 +126,61 @@ print(f"Particles survived: {survivors}")
 ```
 
 ### GPU Block Rules:
-To keep the GPU lightning-fast, there are a few rules for what goes inside a `GPU {}` block:
-
-* **Math Only:** Use it for numbers, arrays, matrices, basic control flow (`for`, `if`), and math functions (`sin`, `cos`, `sqrt`, `abs`).
-* **No Strings or Dictionaries:** You cannot manipulate strings or dictionaries inside the GPU block. Extract dictionary values to scalar variables before entering the GPU block.
+* **Math Only:** Use it for numbers, arrays, matrices, basic control flow (`for`, `while`, `if`), and math functions.
+* **No Strings or Dictionaries:** You cannot manipulate strings or dictionaries inside the GPU block.
 * **Use `blend()` for Array Logic:** If you want to update an array based on a condition, use `blend(condition_array, true_value, false_value)`.
-* **Custom Functions:** You can call custom `fn` functions inside a GPU block, provided the function itself only contains GPU-safe math!
+
+## New in v0.2: Deep Learning & Matrices
+Zweriz v0.2 introduces native matrix multiplication using the `@` operator and a built-in `nn` module for neural networks, complete with automatic differentiation and gradient tracking.
+
+```python
+batch_size = 2048
+epochs = 1000
+lr = 0.001
+
+# Initialize Datasets and Weights
+X = random.uniform(batch_size, 512, -1.0, 1.0)
+Y = random.uniform(batch_size, 10, 0.0, 1.0)
+W1 = random.uniform(512, 1024, -0.1, 0.1)
+
+# Tell Zweriz to track gradients for this weight
+nn.track(W1)
+
+GPU {
+    while epoch < epochs {
+        # Native Matrix Multiplication
+        Z1 = X @ W1
+        # Activation Functions
+        A1 = nn.relu(Z1)
+        
+        # Calculate Loss
+        diff = A1 - Y
+        loss = diff * diff
+        
+        # Backpropagation
+        nn.backward(loss)
+        nn.step(lr)
+        nn.zero_grad()
+        
+        epoch = epoch + 1
+    }
+}
+```
 
 ## Built-in Modules
 Zweriz comes with several built-in global modules ready to use natively:
 
-* `math`: `math.pow`, `math.floor`, `math.ceil`, `math.round`, `math.transpose`, `math.trapz`, `math.gradient`
-* `random`: `random.float()`, `random.randint(min, max)`, `random.uniform(size)`
-* `time`: `time.now()`, `time.sleep(seconds)`
-* `io`: `io.read(path)`, `io.write(path, text)`, `io.append(path, text)`, `io.exists(path)`
-* `os`: `os.cmd(command)`, `os.env(var)`, `os.exit(code)`
-* `string`: `string.len(str)`, `string.parse_num(str)`
+* **math**: `math.pow`, `math.floor`, `math.ceil`, `math.round`, `math.transpose`, `math.trapz`, `math.gradient`
+* **random**: `random.float()`, `random.randint(min, max)`, `random.uniform(size)`
+* **time**: `time.now()`, `time.sleep(seconds)`
+* **io**: `io.read(path)`, `io.write(path, text)`, `io.append(path, text)`, `io.exists(path)`
+* **os**: `os.cmd(command)`, `os.env(var)`, `os.exit(code)`
+* **string**: `string.len(str)`, `string.parse_num(str)`
+* **nn (New!)**: Includes standard activations (`nn.relu`, `nn.sigmoid`, `nn.softmax`, `nn.tanh`, `nn.leaky_relu`, `nn.gelu`, `nn.swish`, `nn.softplus`), regularization (`nn.dropout`), and optimizer controls (`nn.track`, `nn.backward`, `nn.step`, `nn.zero_grad`).
+* **net (New!)**: Simple and native networking capabilities for web requests and TCP connections (`net.http_get(url)`, `net.http_post(url, body)`, `net.tcp_send(addr, data)`, `net.tcp_listen(addr)`).
 
 ## Call for Bug Hunters!
-As mentioned, V0.1 is an experimental playground. If you manage to crash the VM, find a memory leak, or discover a script that causes the GPU fallback to trigger incorrectly, please let me know!
+As mentioned, Zweriz is an experimental playground. If you manage to crash the VM, find a memory leak, or discover a script that causes the GPU fallback to trigger incorrectly, please let me know!
 
 **How to report bugs:**
 1. Save the exact `.zw` script that caused the issue.
