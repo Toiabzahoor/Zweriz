@@ -1,9 +1,6 @@
 # Zweriz Language Cheatsheet
 
-> **Source stats:** `chess/` — 552 lines (4 files) · `tests/` — 470 lines (7 files)  
-> Inferred from `.zw` files; stdlib confirmed from `lexer.rs`, `ast.rs`, `compiler.rs`, `vm.rs`, `modules/`
 
----
 
 ## Comments
 
