@@ -1,0 +1,337 @@
+print("chess loaded")
+
+class BoardState {
+    grid = zeros(64)
+    turn = 0.0
+    castle_WK = 1.0; castle_WQ = 1.0
+    castle_BK = 1.0; castle_BQ = 1.0
+    ep_r = -1.0; ep_c = -1.0
+    halfmove_clock = 0.0
+    fullmove_number = 1.0
+}
+
+fn copy_board(b) {
+    nb = BoardState()
+    nb.grid = array.clone(b.grid)
+    nb.turn = b.turn
+    nb.castle_WK = b.castle_WK; nb.castle_WQ = b.castle_WQ
+    nb.castle_BK = b.castle_BK; nb.castle_BQ = b.castle_BQ
+    nb.ep_r = b.ep_r; nb.ep_c = b.ep_c
+    nb.halfmove_clock = b.halfmove_clock; nb.fullmove_number = b.fullmove_number
+    return nb
+}
+
+fn new_board() {
+    board = BoardState()
+    for c = 0 to 8 { board.grid[8.0 + c] = -1.0; board.grid[48.0 + c] = 1.0 }
+    board.grid[56.0] = 4.0; board.grid[63.0] = 4.0
+    board.grid[57.0] = 2.0; board.grid[62.0] = 2.0
+    board.grid[58.0] = 3.0; board.grid[61.0] = 3.0
+    board.grid[59.0] = 5.0; board.grid[60.0] = 6.0
+    board.grid[0.0] = -4.0; board.grid[7.0] = -4.0
+    board.grid[1.0] = -2.0; board.grid[6.0] = -2.0
+    board.grid[2.0] = -3.0; board.grid[5.0] = -3.0
+    board.grid[3.0] = -5.0; board.grid[4.0] = -6.0
+    return board
+}
+
+fn piece_at(board, r, c) { return board.grid[r * 8.0 + c] }
+
+fn is_in_check(board, color) {
+    g = board.grid
+    g2 = zeros(8,8)
+    for r = 0 to 8 { for c = 0 to 8 { g2[r,c] = g[r*8.0 + c] } }
+
+    K = zeros(8,8); opp_P = zeros(8,8); opp_N = zeros(8,8); opp_B_Q = zeros(8,8); opp_R_Q = zeros(8,8); opp_K = zeros(8,8)
+    p_dir = 0.0
+
+    if color == 0.0 {
+        K = blend(g2 == 6.0, ones(8,8), zeros(8,8))
+        opp_P = blend(g2 == -1.0, ones(8,8), zeros(8,8))
+        opp_N = blend(g2 == -2.0, ones(8,8), zeros(8,8))
+        opp_B_Q = blend(g2 == -3.0, ones(8,8), blend(g2 == -5.0, ones(8,8), zeros(8,8)))
+        opp_R_Q = blend(g2 == -4.0, ones(8,8), blend(g2 == -5.0, ones(8,8), zeros(8,8)))
+        opp_K = blend(g2 == -6.0, ones(8,8), zeros(8,8))
+        p_dir = -1.0
+    } else {
+        K = blend(g2 == -6.0, ones(8,8), zeros(8,8))
+        opp_P = blend(g2 == 1.0, ones(8,8), zeros(8,8))
+        opp_N = blend(g2 == 2.0, ones(8,8), zeros(8,8))
+        opp_B_Q = blend(g2 == 3.0, ones(8,8), blend(g2 == 5.0, ones(8,8), zeros(8,8)))
+        opp_R_Q = blend(g2 == 4.0, ones(8,8), blend(g2 == 5.0, ones(8,8), zeros(8,8)))
+        opp_K = blend(g2 == 6.0, ones(8,8), zeros(8,8))
+        p_dir = 1.0
+    }
+
+    empty = blend(g2 == 0.0, ones(8,8), zeros(8,8))
+
+    if sum(math.shift2d(K, p_dir, -1.0) * opp_P) > 0.0 { return 1.0 }
+    if sum(math.shift2d(K, p_dir, 1.0) * opp_P) > 0.0 { return 1.0 }
+    if sum(math.shift2d(K, -2.0, -1.0) * opp_N) > 0.0 { return 1.0 }
+    if sum(math.shift2d(K, -2.0, 1.0) * opp_N) > 0.0 { return 1.0 }
+    if sum(math.shift2d(K, -1.0, -2.0) * opp_N) > 0.0 { return 1.0 }
+    if sum(math.shift2d(K, -1.0, 2.0) * opp_N) > 0.0 { return 1.0 }
+    if sum(math.shift2d(K, 1.0, -2.0) * opp_N) > 0.0 { return 1.0 }
+    if sum(math.shift2d(K, 1.0, 2.0) * opp_N) > 0.0 { return 1.0 }
+    if sum(math.shift2d(K, -1.0, -1.0) * opp_K) > 0.0 { return 1.0 }
+    if sum(math.shift2d(K, -1.0, 0.0) * opp_K) > 0.0 { return 1.0 }
+    if sum(math.shift2d(K, -1.0, 1.0) * opp_K) > 0.0 { return 1.0 }
+    if sum(math.shift2d(K, 0.0, -1.0) * opp_K) > 0.0 { return 1.0 }
+    if sum(math.shift2d(K, 0.0, 1.0) * opp_K) > 0.0 { return 1.0 }
+    if sum(math.shift2d(K, 1.0, -1.0) * opp_K) > 0.0 { return 1.0 }
+    if sum(math.shift2d(K, 1.0, 0.0) * opp_K) > 0.0 { return 1.0 }
+    if sum(math.shift2d(K, 1.0, 1.0) * opp_K) > 0.0 { return 1.0 }
+
+    ray_N = K; ray_S = K; ray_E = K; ray_W = K
+    ray_NE = K; ray_NW = K; ray_SE = K; ray_SW = K
+
+    for dist = 1.0 to 8.0 {
+        ray_N = math.shift2d(ray_N, -1.0, 0.0); if sum(ray_N * opp_R_Q) > 0.0 { return 1.0 }; ray_N = ray_N * empty
+        ray_S = math.shift2d(ray_S, 1.0, 0.0); if sum(ray_S * opp_R_Q) > 0.0 { return 1.0 }; ray_S = ray_S * empty
+        ray_E = math.shift2d(ray_E, 0.0, 1.0); if sum(ray_E * opp_R_Q) > 0.0 { return 1.0 }; ray_E = ray_E * empty
+        ray_W = math.shift2d(ray_W, 0.0, -1.0); if sum(ray_W * opp_R_Q) > 0.0 { return 1.0 }; ray_W = ray_W * empty
+        ray_NE = math.shift2d(ray_NE, -1.0, 1.0); if sum(ray_NE * opp_B_Q) > 0.0 { return 1.0 }; ray_NE = ray_NE * empty
+        ray_NW = math.shift2d(ray_NW, -1.0, -1.0); if sum(ray_NW * opp_B_Q) > 0.0 { return 1.0 }; ray_NW = ray_NW * empty
+        ray_SE = math.shift2d(ray_SE, 1.0, 1.0); if sum(ray_SE * opp_B_Q) > 0.0 { return 1.0 }; ray_SE = ray_SE * empty
+        ray_SW = math.shift2d(ray_SW, 1.0, -1.0); if sum(ray_SW * opp_B_Q) > 0.0 { return 1.0 }; ray_SW = ray_SW * empty
+    }
+
+    return 0.0
+}
+
+fn make_move(board, r1, c1, r2, c2) {
+    g = board.grid
+    idx1 = r1 * 8.0 + c1; idx2 = r2 * 8.0 + c2
+    p = g[idx1]; dest = g[idx2]
+    abs_p = abs(p)
+
+    is_capture = 0.0
+    if not (dest == 0.0) { is_capture = 1.0 }
+
+    is_ep = 0.0
+    if abs_p == 1.0 { if abs(c2 - c1) == 1.0 { if dest == 0.0 { is_ep = 1.0; is_capture = 1.0 } } }
+    if is_ep == 1.0 { g[r1 * 8.0 + c2] = 0.0 }
+
+    is_castling = 0.0
+    if abs_p == 6.0 { if abs(c2 - c1) == 2.0 { is_castling = 1.0 } }
+
+    if is_castling == 1.0 {
+        if c2 > c1 {
+            g[r1 * 8.0 + 5.0] = g[r1 * 8.0 + 7.0]; g[r1 * 8.0 + 7.0] = 0.0
+        } else {
+            g[r1 * 8.0 + 3.0] = g[r1 * 8.0 + 0.0]; g[r1 * 8.0 + 0.0] = 0.0
+        }
+    }
+
+    place = p
+    if abs_p == 1.0 {
+        if r2 == 0.0 { place = 5.0 }
+        if r2 == 7.0 { place = -5.0 }
+    }
+
+    g[idx1] = 0.0; g[idx2] = place
+
+    if r1 == 7.0 { if c1 == 4.0 { board.castle_WK = 0.0; board.castle_WQ = 0.0 }; if c1 == 0.0 { board.castle_WQ = 0.0 }; if c1 == 7.0 { board.castle_WK = 0.0 } }
+    if r1 == 0.0 { if c1 == 4.0 { board.castle_BK = 0.0; board.castle_BQ = 0.0 }; if c1 == 0.0 { board.castle_BQ = 0.0 }; if c1 == 7.0 { board.castle_BK = 0.0 } }
+    if r2 == 7.0 { if c2 == 0.0 { board.castle_WQ = 0.0 }; if c2 == 7.0 { board.castle_WK = 0.0 } }
+    if r2 == 0.0 { if c2 == 0.0 { board.castle_BQ = 0.0 }; if c2 == 7.0 { board.castle_BK = 0.0 } }
+
+    board.ep_r = -1.0; board.ep_c = -1.0
+    if abs_p == 1.0 {
+        if abs(r2 - r1) == 2.0 { dir = (r2 - r1) / 2.0; board.ep_r = r1 + dir; board.ep_c = c1 }
+        board.halfmove_clock = 0.0
+    } else {
+        if is_capture == 1.0 { board.halfmove_clock = 0.0 } else { board.halfmove_clock = board.halfmove_clock + 1.0 }
+    }
+
+    if board.turn == 0.0 { board.turn = 1.0 } else { board.turn = 0.0; board.fullmove_number = board.fullmove_number + 1.0 }
+    return board
+}
+
+fn pseudo_moves(board) {
+    moves = zeros(8192)
+    count = 0.0
+    my_color = board.turn
+
+    g2 = zeros(8,8)
+    for r = 0 to 8 { for c = 0 to 8 { g2[r,c] = board.grid[r*8.0 + c] } }
+
+    P = zeros(8,8); N = zeros(8,8); B = zeros(8,8); R = zeros(8,8); Q = zeros(8,8); K = zeros(8,8)
+
+    if my_color == 0.0 {
+        P = blend(g2 == 1.0, ones(8,8), zeros(8,8)); N = blend(g2 == 2.0, ones(8,8), zeros(8,8)); B = blend(g2 == 3.0, ones(8,8), zeros(8,8))
+        R = blend(g2 == 4.0, ones(8,8), zeros(8,8)); Q = blend(g2 == 5.0, ones(8,8), zeros(8,8)); K = blend(g2 == 6.0, ones(8,8), zeros(8,8))
+        opp_pieces = blend(g2 < 0.0, ones(8,8), zeros(8,8))
+        valid_target = blend(g2 <= 0.0, ones(8,8), zeros(8,8))
+        p_dir = -1.0; p_start = 6.0
+    } else {
+        P = blend(g2 == -1.0, ones(8,8), zeros(8,8)); N = blend(g2 == -2.0, ones(8,8), zeros(8,8)); B = blend(g2 == -3.0, ones(8,8), zeros(8,8))
+        R = blend(g2 == -4.0, ones(8,8), zeros(8,8)); Q = blend(g2 == -5.0, ones(8,8), zeros(8,8)); K = blend(g2 == -6.0, ones(8,8), zeros(8,8))
+        opp_pieces = blend(g2 > 0.0, ones(8,8), zeros(8,8))
+        valid_target = blend(g2 >= 0.0, ones(8,8), zeros(8,8))
+        p_dir = 1.0; p_start = 1.0
+    }
+
+    empty = blend(g2 == 0.0, ones(8,8), zeros(8,8))
+
+    p_up1 = blend(empty == 1.0, math.shift2d(P, p_dir, 0.0), zeros(8,8))
+    P_start = zeros(8,8)
+    for c = 0 to 8 { P_start[p_start, c] = P[p_start, c] }
+    p_up2 = blend(empty == 1.0, math.shift2d(blend(empty == 1.0, math.shift2d(P_start, p_dir, 0.0), zeros(8,8)), p_dir, 0.0), zeros(8,8))
+
+    p_cap_l = blend(opp_pieces == 1.0, math.shift2d(P, p_dir, -1.0), zeros(8,8))
+    p_cap_r = blend(opp_pieces == 1.0, math.shift2d(P, p_dir, 1.0), zeros(8,8))
+
+    p_ep_l = zeros(8,8); p_ep_r = zeros(8,8)
+    if board.ep_r >= 0.0 {
+        ep_target = zeros(8,8); ep_target[board.ep_r, board.ep_c] = 1.0
+        p_ep_l = blend(ep_target == 1.0, math.shift2d(P, p_dir, -1.0), zeros(8,8))
+        p_ep_r = blend(ep_target == 1.0, math.shift2d(P, p_dir, 1.0), zeros(8,8))
+    }
+
+    n1 = blend(valid_target == 1.0, math.shift2d(N, -2.0, -1.0), zeros(8,8)); n2 = blend(valid_target == 1.0, math.shift2d(N, -2.0, 1.0), zeros(8,8))
+    n3 = blend(valid_target == 1.0, math.shift2d(N, -1.0, -2.0), zeros(8,8)); n4 = blend(valid_target == 1.0, math.shift2d(N, -1.0, 2.0), zeros(8,8))
+    n5 = blend(valid_target == 1.0, math.shift2d(N, 1.0, -2.0), zeros(8,8)); n6 = blend(valid_target == 1.0, math.shift2d(N, 1.0, 2.0), zeros(8,8))
+    n7 = blend(valid_target == 1.0, math.shift2d(N, 2.0, -1.0), zeros(8,8)); n8 = blend(valid_target == 1.0, math.shift2d(N, 2.0, 1.0), zeros(8,8))
+
+    k1 = blend(valid_target == 1.0, math.shift2d(K, -1.0, -1.0), zeros(8,8)); k2 = blend(valid_target == 1.0, math.shift2d(K, -1.0, 0.0), zeros(8,8))
+    k3 = blend(valid_target == 1.0, math.shift2d(K, -1.0, 1.0), zeros(8,8)); k4 = blend(valid_target == 1.0, math.shift2d(K, 0.0, -1.0), zeros(8,8))
+    k5 = blend(valid_target == 1.0, math.shift2d(K, 0.0, 1.0), zeros(8,8)); k6 = blend(valid_target == 1.0, math.shift2d(K, 1.0, -1.0), zeros(8,8))
+    k7 = blend(valid_target == 1.0, math.shift2d(K, 1.0, 0.0), zeros(8,8)); k8 = blend(valid_target == 1.0, math.shift2d(K, 1.0, 1.0), zeros(8,8))
+
+    cast_K = 0.0; cast_Q = 0.0
+    if my_color == 0.0 { if board.castle_WK == 1.0 { cast_K = 1.0 }; if board.castle_WQ == 1.0 { cast_Q = 1.0 } }
+    else { if board.castle_BK == 1.0 { cast_K = 1.0 }; if board.castle_BQ == 1.0 { cast_Q = 1.0 } }
+
+    c_k_mask = zeros(8,8); c_q_mask = zeros(8,8)
+    if cast_K == 1.0 {
+        if my_color == 0.0 { if empty[7,5] == 1.0 { if empty[7,6] == 1.0 { c_k_mask[7,6] = 1.0 } } }
+        else { if empty[0,5] == 1.0 { if empty[0,6] == 1.0 { c_k_mask[0,6] = 1.0 } } }
+    }
+    if cast_Q == 1.0 {
+        if my_color == 0.0 { if empty[7,1] == 1.0 { if empty[7,2] == 1.0 { if empty[7,3] == 1.0 { c_q_mask[7,2] = 1.0 } } } }
+        else { if empty[0,1] == 1.0 { if empty[0,2] == 1.0 { if empty[0,3] == 1.0 { c_q_mask[0,2] = 1.0 } } } }
+    }
+
+    for r = 0 to 8 {
+        for c = 0 to 8 {
+            if p_up1[r,c] == 1.0 { idx=count*4.0; moves[idx]=r-p_dir; moves[idx+1.0]=c; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if p_up2[r,c] == 1.0 { idx=count*4.0; moves[idx]=r-p_dir*2.0; moves[idx+1.0]=c; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if p_cap_l[r,c] == 1.0 { idx=count*4.0; moves[idx]=r-p_dir; moves[idx+1.0]=c+1.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if p_cap_r[r,c] == 1.0 { idx=count*4.0; moves[idx]=r-p_dir; moves[idx+1.0]=c-1.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if p_ep_l[r,c] == 1.0 { idx=count*4.0; moves[idx]=r-p_dir; moves[idx+1.0]=c+1.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if p_ep_r[r,c] == 1.0 { idx=count*4.0; moves[idx]=r-p_dir; moves[idx+1.0]=c-1.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+
+            if n1[r,c] == 1.0 { idx=count*4.0; moves[idx]=r+2.0; moves[idx+1.0]=c+1.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if n2[r,c] == 1.0 { idx=count*4.0; moves[idx]=r+2.0; moves[idx+1.0]=c-1.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if n3[r,c] == 1.0 { idx=count*4.0; moves[idx]=r+1.0; moves[idx+1.0]=c+2.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if n4[r,c] == 1.0 { idx=count*4.0; moves[idx]=r+1.0; moves[idx+1.0]=c-2.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if n5[r,c] == 1.0 { idx=count*4.0; moves[idx]=r-1.0; moves[idx+1.0]=c+2.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if n6[r,c] == 1.0 { idx=count*4.0; moves[idx]=r-1.0; moves[idx+1.0]=c-2.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if n7[r,c] == 1.0 { idx=count*4.0; moves[idx]=r-2.0; moves[idx+1.0]=c+1.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if n8[r,c] == 1.0 { idx=count*4.0; moves[idx]=r-2.0; moves[idx+1.0]=c-1.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+
+            if k1[r,c] == 1.0 { idx=count*4.0; moves[idx]=r+1.0; moves[idx+1.0]=c+1.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if k2[r,c] == 1.0 { idx=count*4.0; moves[idx]=r+1.0; moves[idx+1.0]=c;     moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if k3[r,c] == 1.0 { idx=count*4.0; moves[idx]=r+1.0; moves[idx+1.0]=c-1.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if k4[r,c] == 1.0 { idx=count*4.0; moves[idx]=r;     moves[idx+1.0]=c+1.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if k5[r,c] == 1.0 { idx=count*4.0; moves[idx]=r;     moves[idx+1.0]=c-1.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if k6[r,c] == 1.0 { idx=count*4.0; moves[idx]=r-1.0; moves[idx+1.0]=c+1.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if k7[r,c] == 1.0 { idx=count*4.0; moves[idx]=r-1.0; moves[idx+1.0]=c;     moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            if k8[r,c] == 1.0 { idx=count*4.0; moves[idx]=r-1.0; moves[idx+1.0]=c-1.0; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+
+            if c_k_mask[r,c] == 1.0 { kr = 7.0; if my_color == 1.0 { kr = 0.0 }; idx=count*4.0; moves[idx]=kr; moves[idx+1.0]=4.0; moves[idx+2.0]=kr; moves[idx+3.0]=6.0; count=count+1.0 }
+            if c_q_mask[r,c] == 1.0 { kr = 7.0; if my_color == 1.0 { kr = 0.0 }; idx=count*4.0; moves[idx]=kr; moves[idx+1.0]=4.0; moves[idx+2.0]=kr; moves[idx+3.0]=2.0; count=count+1.0 }
+        }
+    }
+
+    ortho = R + Q; diag = B + Q
+    ray_N = ortho; ray_S = ortho; ray_E = ortho; ray_W = ortho
+    ray_NE = diag; ray_NW = diag; ray_SE = diag; ray_SW = diag
+
+    for dist = 1.0 to 8.0 {
+        ray_N = blend(valid_target == 1.0, math.shift2d(ray_N, -1.0, 0.0), zeros(8,8))
+        ray_S = blend(valid_target == 1.0, math.shift2d(ray_S, 1.0, 0.0), zeros(8,8))
+        ray_E = blend(valid_target == 1.0, math.shift2d(ray_E, 0.0, 1.0), zeros(8,8))
+        ray_W = blend(valid_target == 1.0, math.shift2d(ray_W, 0.0, -1.0), zeros(8,8))
+        ray_NE = blend(valid_target == 1.0, math.shift2d(ray_NE, -1.0, 1.0), zeros(8,8))
+        ray_NW = blend(valid_target == 1.0, math.shift2d(ray_NW, -1.0, -1.0), zeros(8,8))
+        ray_SE = blend(valid_target == 1.0, math.shift2d(ray_SE, 1.0, 1.0), zeros(8,8))
+        ray_SW = blend(valid_target == 1.0, math.shift2d(ray_SW, 1.0, -1.0), zeros(8,8))
+
+        for r = 0 to 8 {
+            for c = 0 to 8 {
+                if ray_N[r,c] == 1.0 { idx=count*4.0; moves[idx]=r+dist; moves[idx+1.0]=c; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+                if ray_S[r,c] == 1.0 { idx=count*4.0; moves[idx]=r-dist; moves[idx+1.0]=c; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+                if ray_E[r,c] == 1.0 { idx=count*4.0; moves[idx]=r; moves[idx+1.0]=c-dist; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+                if ray_W[r,c] == 1.0 { idx=count*4.0; moves[idx]=r; moves[idx+1.0]=c+dist; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+                if ray_NE[r,c] == 1.0 { idx=count*4.0; moves[idx]=r+dist; moves[idx+1.0]=c-dist; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+                if ray_NW[r,c] == 1.0 { idx=count*4.0; moves[idx]=r+dist; moves[idx+1.0]=c+dist; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+                if ray_SE[r,c] == 1.0 { idx=count*4.0; moves[idx]=r-dist; moves[idx+1.0]=c-dist; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+                if ray_SW[r,c] == 1.0 { idx=count*4.0; moves[idx]=r-dist; moves[idx+1.0]=c+dist; moves[idx+2.0]=r; moves[idx+3.0]=c; count=count+1.0 }
+            }
+        }
+        ray_N = ray_N * empty; ray_S = ray_S * empty; ray_E = ray_E * empty; ray_W = ray_W * empty
+        ray_NE = ray_NE * empty; ray_NW = ray_NW * empty; ray_SE = ray_SE * empty; ray_SW = ray_SW * empty
+    }
+
+    slice_end = count * 4.0
+    if slice_end == 0.0 { return zeros(0) }
+    return moves[0.0 : slice_end]
+}
+
+fn legal_moves(board) {
+    pseudo = pseudo_moves(board)
+    p_len = len(pseudo)
+    out_moves = zeros(8192)
+    out_idx = 0.0
+
+    if p_len > 0.0 {
+        count = p_len / 4.0
+        for i = 0 to count {
+            base = i * 4.0
+            if base + 3.0 < p_len {
+                r1 = pseudo[base]; c1 = pseudo[base + 1.0]
+                r2 = pseudo[base + 2.0]; c2 = pseudo[base + 3.0]
+
+                idx1 = r1 * 8.0 + c1
+                idx2 = r2 * 8.0 + c2
+
+                p = board.grid[idx1]
+                cap = board.grid[idx2]
+
+                board.grid[idx1] = 0.0
+                board.grid[idx2] = p
+
+                is_valid = 1.0
+                if is_in_check(board, board.turn) == 1.0 { is_valid = 0.0 }
+
+                board.grid[idx1] = p
+                board.grid[idx2] = cap
+
+                is_castling = 0.0
+                if abs(p) == 6.0 { if abs(c2 - c1) == 2.0 { is_castling = 1.0 } }
+                if is_castling == 1.0 {
+                    if is_in_check(board, board.turn) == 1.0 { is_valid = 0.0 }
+                    mid_c = c1 + (c2 - c1) / 2.0
+                    mid_idx = r1 * 8.0 + mid_c
+                    board.grid[idx1] = 0.0
+                    board.grid[mid_idx] = p
+                    if is_in_check(board, board.turn) == 1.0 { is_valid = 0.0 }
+                    board.grid[mid_idx] = 0.0
+                    board.grid[idx1] = p
+                }
+
+                if is_valid == 1.0 {
+                    idx = out_idx * 4.0
+                    out_moves[idx] = r1; out_moves[idx+1.0] = c1
+                    out_moves[idx+2.0] = r2; out_moves[idx+3.0] = c2
+                    out_idx = out_idx + 1.0
+                }
+            }
+        }
+    }
+    slice_end = out_idx * 4.0
+    if slice_end == 0.0 { return zeros(0) }
+    return out_moves[0.0 : slice_end]
+}

@@ -1,0 +1,32 @@
+
+import chess
+
+print("engine loaded")
+
+fn best_move(board) {
+    w_k = 0.0
+    b_k = 0.0
+    for i = 0 to 63 {
+        if board.grid[i] == 6.0 { w_k = 1.0 }
+        if board.grid[i] == -6.0 { b_k = 1.0 }
+    }
+    if w_k == 0.0 or b_k == 0.0 { return zeros(0) }
+
+    moves = legal_moves(board)
+    if len(moves) == 0.0 { return zeros(0) }
+
+    max_depth = 10
+    
+    budget = 0.0 
+    
+    small_delta = 50.0
+    high_delta = 300.0
+    grace_depth = 5.0
+ 
+    GPU {
+        best_move = search(board.grid, max_depth, budget, board.turn, small_delta, high_delta, grace_depth)
+    }
+    
+    if len(best_move) == 0.0 { return zeros(0) }
+    return best_move
+}

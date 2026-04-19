@@ -1,0 +1,109 @@
+print("heuristics loaded")
+
+class HCtx {
+    w_pawn = zeros(1, 64)
+    b_pawn = zeros(1, 64)
+    w_knight = zeros(1, 64)
+    b_knight = zeros(1, 64)
+    center = zeros(1, 64)
+}
+
+fn broadcast_pst(pst_flat, batch_size) {
+    res = zeros(batch_size, 64)
+    for i = 0 to batch_size {
+        if i < batch_size {
+            for j = 0 to 64 {
+                if j < 64.0 {
+                    res[i, j] = pst_flat[j]
+                }
+            }
+        }
+    }
+    return res
+}
+
+fn init_heuristics(batch_size) {
+    ctx = HCtx()
+
+    w_p = zeros(64); b_p = zeros(64)
+    k_p = zeros(64); c_p = zeros(64)
+
+    for r = 0 to 8 {
+        for c = 0 to 8 {
+            idx = r * 8.0 + c
+            if idx < 64.0 {
+                dr = 3.5 - r; if dr < 0.0 { dr = 0.0 - dr }
+                dc = 3.5 - c; if dc < 0.0 { dc = 0.0 - dc }
+
+                max_d = dr; if dc > dr { max_d = dc }
+                center_score = 3.5 - max_d
+
+                w_p[idx] = center_score
+                k_p[idx] = center_score * 1.5
+                c_p[idx] = center_score * 0.5
+
+                mirrored_idx = (7.0 - r) * 8.0 + c
+                if mirrored_idx < 64.0 { b_p[mirrored_idx] = center_score }
+            }
+        }
+    }
+
+    ctx.w_pawn = broadcast_pst(w_p, batch_size)
+    ctx.b_pawn = broadcast_pst(b_p, batch_size)
+    ctx.w_knight = broadcast_pst(k_p, batch_size)
+    ctx.b_knight = ctx.w_knight
+    ctx.center = broadcast_pst(c_p, batch_size)
+
+    return ctx
+}
+
+fn evaluate_batch(ctx, batch_grids, my_color, universe_count) {
+    vP = 10.0; vN = 30.0; vB = 30.0; vR = 50.0; vQ = 90.0
+
+    w_pawn_arr = ctx.w_pawn
+    b_pawn_arr = ctx.b_pawn
+    w_knight_arr = ctx.w_knight
+    b_knight_arr = ctx.b_knight
+    center_arr = ctx.center
+
+    batch_size = len(batch_grids)
+    eval_matrix = zeros(batch_size, 64)
+
+    GPU {
+        w_P_mask = blend(batch_grids == 1.0, 1.0, 0.0)
+        w_N_mask = blend(batch_grids == 2.0, 1.0, 0.0)
+        w_B_mask = blend(batch_grids == 3.0, 1.0, 0.0)
+        w_R_mask = blend(batch_grids == 4.0, 1.0, 0.0)
+        w_Q_mask = blend(batch_grids == 5.0, 1.0, 0.0)
+
+        b_P_mask = blend(batch_grids == -1.0, 1.0, 0.0)
+        b_N_mask = blend(batch_grids == -2.0, 1.0, 0.0)
+        b_B_mask = blend(batch_grids == -3.0, 1.0, 0.0)
+        b_R_mask = blend(batch_grids == -4.0, 1.0, 0.0)
+        b_Q_mask = blend(batch_grids == -5.0, 1.0, 0.0)
+
+        w_mat = (w_P_mask * vP) + (w_N_mask * vN) + (w_B_mask * vB) + (w_R_mask * vR) + (w_Q_mask * vQ)
+        b_mat = (b_P_mask * vP) + (b_N_mask * vN) + (b_B_mask * vB) + (b_R_mask * vR) + (b_Q_mask * vQ)
+
+        w_pos = (w_P_mask * w_pawn_arr) + (w_N_mask * w_knight_arr) + (w_B_mask * center_arr)
+        b_pos = (b_P_mask * b_pawn_arr) + (b_N_mask * b_knight_arr) + (b_B_mask * center_arr)
+
+        eval_matrix = (w_mat - b_mat) + (w_pos - b_pos)
+    }
+
+    color_mult = 1.0
+    if my_color == 1.0 { color_mult = -1.0 }
+
+    scores = zeros(universe_count)
+    for i = 0 to universe_count {
+        if i < universe_count {
+            s = 0.0
+            for j = 0 to 64 {
+                if j < 64.0 { s = s + eval_matrix[i, j] }
+            }
+            scores[i] = s * color_mult
+        }
+    }
+
+    return scores
+}

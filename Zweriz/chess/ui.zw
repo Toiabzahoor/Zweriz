@@ -1,0 +1,72 @@
+import chess
+import engine
+
+print("========================================")
+print("  ZWERIZ CHESS ENGINE")
+print("")
+print("========================================")
+
+fn draw_board(board) {
+    print("  0 1 2 3 4 5 6 7")
+    print("------------------")
+    for r = 0 to 8 {
+        if r < 8.0 {
+            row_str = "" + r + " | "
+            for c = 0 to 8 {
+                if c < 8.0 {
+                    p = board.grid[r * 8.0 + c]
+                    if p == 0.0 { row_str = row_str + ". " }
+                    if p == 1.0 { row_str = row_str + "P " }
+                    if p == 2.0 { row_str = row_str + "N " }
+                    if p == 3.0 { row_str = row_str + "B " }
+                    if p == 4.0 { row_str = row_str + "R " }
+                    if p == 5.0 { row_str = row_str + "Q " }
+                    if p == 6.0 { row_str = row_str + "K " }
+                    if p == -1.0 { row_str = row_str + "p " }
+                    if p == -2.0 { row_str = row_str + "n " }
+                    if p == -3.0 { row_str = row_str + "b " }
+                    if p == -4.0 { row_str = row_str + "r " }
+                    if p == -5.0 { row_str = row_str + "q " }
+                    if p == -6.0 { row_str = row_str + "k " }
+                }
+            }
+            print(row_str)
+        }
+    }
+    print("------------------")
+}
+
+board = new_board()
+draw_board(board)
+
+for ply = 0 to 200 {
+    if ply < 200.0 {
+        print("\n----------------------------------------")
+        if board.turn == 0.0 {
+            print("Ply " + ply + " - WHITE is thinking...")
+        } else {
+            print("Ply " + ply + " - BLACK is thinking...")
+        }
+
+        t_start = time()
+
+        move = best_move(board)
+
+        t_end = time()
+        elapsed = t_end - t_start
+
+        if len(move) == 0.0 {
+            print("no valid moves. game over.")
+            ply = 999.0
+        } else {
+            r1 = move[0]; c1 = move[1]
+            r2 = move[2]; c2 = move[3]
+
+            print("move: (" + r1 + ", " + c1 + ") -> (" + r2 + ", " + c2 + ")")
+            print("time: " + elapsed + " seconds")
+
+            board = make_move(board, r1, c1, r2, c2)
+            draw_board(board)
+        }
+    }
+}
