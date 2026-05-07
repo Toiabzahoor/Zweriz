@@ -1,32 +1,65 @@
 # I Built a Custom GPU Chess Engine and Virtual Machine in 12 Days (Because I Got Bored)
+
 Traditional chess engines are bottlenecked by CPU-bound Alpha-Beta pruning. GPUs inherently despise sequential branching, so the industry standard is to keep the search tree firmly on the CPU and only offload the neural network evaluation math.
+
 That is a limitation of imagination, not hardware.
+
 I am 15, and I started writing Rust this past February. Over the last two weeks, I designed a Turing-complete language, a custom virtual machine utilizing NaN-boxing, a JIT GPU transpiler, and a fully parallelized CUDA chess engine.
+
 To be completely honest, I originally just set out to build the Zweriz programming language. I got bored of that halfway through, so I decided to prove its worth by writing a completely novel GPU chess engine on top of it.
+
 I built the entire architecture from scratch using a browser-based cloud environment (GitHub Codespaces) because I don’t even own a dedicated GPU to test it on. Every single kernel had to be deployed blindly to a remote Modal node. The engine uses a Queue-Based Breadth-First Beam Search that runs move generation, parallel expansion, and state evaluation entirely within CUDA kernels.
+
 I am open-sourcing the architecture and claiming the implementation now simply because I have lost interest in it. The core problem is solved, and spending more than 12 days on a concept this straightforward is unnecessary.
+
 Here is how I broke traditional engine architecture.
+
 ## Part 1: Getting Bored of My Own Language (Zweriz)
+
 Before attacking the chess engine, I needed a proper ecosystem. I wrote Zweriz, a dynamically typed language, entirely in Rust. It features a custom lexer, an AST parser, and a bytecode compiler that targets a custom virtual machine.
+
 To squeeze every drop of performance out of the VM, I implemented *NaN-boxing*. Instead of relying on Rust's enums—which bloat memory with tags—all values are stored as 64-bit IEEE 754 floats. Pointers to strings, arrays, and dictionaries are packed into the unused bits of a Not-a-Number (NaN) float. This keeps memory perfectly contiguous and cache-friendly.
+
 The actual firepower is the built-in JIT GPU transpiler. You can write code inside a GPU { ... } block, and the Zweriz compiler intercepts the AST, transpiles the operations into CUDA C++ source code at runtime, and compiles it to PTX using cudarc. It handles all the memory transfers between the CPU heap and the GPU VRAM automatically.
+
 Once the language was functional, I got bored of just building standard features. I needed a stress test.
+
 ## Part 2: Shattering Alpha-Beta with Parallel Beam Search
+
 Alpha-Beta pruning is fundamentally sequential. You need the evaluation of node A to decide whether to prune node B. If you put that on a GPU, the Single Instruction, Multiple Threads (SIMT) architecture falls apart due to massive branch divergence.
+
 To solve this, I designed a *Queue-Based Breadth-First Beam Search* tailored explicitly for CUDA.
+
 Instead of a recursive depth-first search, the engine maintains a flat array in VRAM, hardcoded to a MAX_QUEUE_SIZE of 16,384. Why is the queue that small? Because renting high-end GPUs with massive VRAM on Modal costs money, and I don't have any. I had to build a search algorithm that could fit inside strict, poor-man's hardware constraints.
+
 The search process is aggressively parallelized across three custom kernels:
+
  1. *init_search_kernel*: Evaluates the root board state and populates the initial queue with valid pseudo-legal moves.
  2. *expand_kernel*: Every thread on the GPU takes a board state from the queue and simultaneously generates up to 218 possible moves for the next ply.
  3. *commit_kernel*: This is where the algorithm becomes a Beam Search. Pure Breadth-First Search explodes exponentially. My commit kernel acts as a dynamic filter. It evaluates the delta between a node's score and a north_star (the best known value), factoring in a grace_ttl mechanism. Unpromising branches are dropped dynamically, ensuring the queue never exceeds 16,384 states, keeping the cheap GPU instances saturated with only the highest-quality nodes.
+
 ## Part 3: The Float-to-Bitboard Hybrid
+
 Because Zweriz stores array data as floats, the chess board is passed to the GPU as a 64-element float array. Iterating through 64 floats to calculate move validity on a GPU is a massive bottleneck.
+
 To bypass this, my kernels dynamically compress the float array into unsigned long long bitmasks on the fly. Inside the is_in_check device function, the float board state is converted into bitboards (K, opp_P, opp_RQ, etc.). Once converted, the engine uses highly optimized bitwise shifts—like (K >> 9) & 0x7F7F7F7F7F7F7F7FULL to calculate attack rays—evaluating checks in a single clock cycle.
+
 This creates a seamless bridge between a dynamically typed high-level language and low-level bitboard mathematics.
+
 ## Part 4: GPU-Native Heuristics
+
 Writing an evaluation function in CUDA C++ requires strict memory coalescing to avoid stalling the VRAM. My eval_kernel is fully parallelized and features a tapered evaluation that interpolates smoothly between midgame and endgame Piece-Square Tables (PSTs) based on material phase.
+
 It calculates complex positional advantages natively on the GPU via bitmasking, checking for isolated pawns, doubled pawns, knight outposts, and king safety shields. It even includes a custom mop_up function utilizing Manhattan distance to force checkmates in won endgames without requiring deep search.
+
 ## Building Blind
+
 The most difficult aspect of this wasn't the algorithm; it was the fact that I had no testing rig. Since I don't own a PC with a GPU, I wrote the Rust and CUDA code entirely in a browser using GitHub Codespaces. I deployed the engine to a remote NVIDIA T4 node via Python wrappers and relied completely on remote logs.
+
 Debugging parallel thread synchronization—like __syncthreads() and atomicCAS—over a remote deployment loop without a local profiler requires you to simulate the entire VRAM execution state in your head. Because of this blind iteration workflow, the engine is likely not hardened against every edge case, but the core parallel search architecture is functional and proves the concept.
+
 In 12 days, I went from an empty repository to a custom virtual machine executing dynamic PTX-compiled CUDA kernels for parallel game-tree search. I am putting this out there to document the architecture and claim the algorithm before someone else does. Do with it what you want; I am moving on to more interesting problems.
+
+## Part 5: Zweriz v0.3.0 
+
+Version 0.3.0 introduces a dynamic loading mechanism to the architecture. The environment can now ingest external compiled shared objects at runtime using their system paths. Scripts can invoke routines exported by these external objects by simply passing a handle, the routine's string identifier, and up to four numeric parameters directly from the native execution space. This allows the ecosystem to expand its operational capabilities on the fly, eliminating the need to structurally alter the interpreter's source code for every new integration.
