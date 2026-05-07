@@ -1,6 +1,6 @@
 [package]
 name = "zweriz"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 
 [dependencies]
@@ -8,6 +8,8 @@ logos = "0.14"
 cudarc = { version = "0.11", features = ["nvrtc", "cuda-version-from-build-system"], optional = true }
 rand = "0.8.5"
 memmap2 = "0.7.1"
+libloading = "0.8"
+lazy_static = "1.4"
 
 [features]
 default = []

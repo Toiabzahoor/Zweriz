@@ -13,6 +13,7 @@ pub enum Expr {
     SliceAccess { target: Box<Expr>, start: Option<Box<Expr>>, end: Option<Box<Expr>> },
     IndexAccess { target: Box<Expr>, index: Box<Expr> },
     MultiIndexAccess { target: Box<Expr>, indices: Vec<Expr> },
+    MethodCall { target: Box<Expr>, method: String, args: Vec<Expr> },
 }
 
 #[derive(Debug, Clone)]
@@ -25,6 +26,7 @@ pub enum Statement {
     If { condition: Expr, then_branch: Vec<Statement>, else_branch: Option<Vec<Statement>> },
     While { condition: Expr, body: Vec<Statement> },
     FunctionDecl { name: String, params: Vec<String>, body: Vec<Statement> },
+    ClassDecl { name: String, properties: Vec<(String, Expr)>, methods: Vec<Statement> },
     Return { value: Expr },
     Break,
     Continue,

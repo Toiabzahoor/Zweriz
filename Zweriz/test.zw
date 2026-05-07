@@ -1,0 +1,131 @@
+print("==========================================")
+print("       ZWERIZ CORE CAPABILITY TEST        ")
+print("==========================================")
+
+print("")
+print("--- 1. Variables, Math & FStrings ---")
+a = 10
+b = 20
+c = a + b
+msg = f"Adding {a} and {b} gives {c}"
+print(msg)
+
+print("")
+print("--- 2. Arrays, Dictionaries & Loops ---")
+arr = [10, 20, 30, 40]
+sum_arr = 0
+
+for x in arr {
+    sum_arr = sum_arr + x
+}
+print(f"Sum of array elements: {sum_arr}")
+
+config = {"engine": "Zweriz", "version": 0.2, "fast": true}
+print(f"Running {config.engine} version {config.version}")
+
+print("")
+print("--- 3. Control Flow ---")
+if sum_arr == 100 {
+    print("If-Condition matched: Sum is exactly 100")
+} else {
+    print("If-Condition matched: Sum is NOT 100")
+}
+
+countdown = 3
+while countdown > 0 {
+    print(f"While loop countdown: {countdown}")
+    countdown = countdown - 1
+}
+
+print("")
+print("--- 4. Closures & First-Class Functions ---")
+fn make_multiplier(factor) {
+    fn multiplier(value) {
+        return value * factor
+    }
+    return multiplier
+}
+
+times_five = make_multiplier(5)
+times_ten = make_multiplier(10)
+
+print(f"7 times 5 using closure is {times_five(7)}")
+print(f"7 times 10 using closure is {times_ten(7)}")
+
+print("")
+print("--- 5. True Object-Orientation ---")
+class Robot {
+    name = "Unnamed"
+    battery = 100
+
+    fn initialize(robot_name) {
+        self.name = robot_name
+        return self.name
+    }
+
+    fn work(energy_cost) {
+        self.battery = self.battery - energy_cost
+        return self.battery
+    }
+
+    fn get_status() {
+        return self.battery
+    }
+}
+
+bot = Robot()
+bot.initialize("Z-Bot 9000")
+bot.work(15)
+bot.work(20)
+print(f"Robot {bot.name} has {bot.get_status()}% battery remaining.")
+
+print("")
+print("--- 6. Exception Handling (Try/Catch) ---")
+try {
+    print("Attempting a dangerous operation...")
+    throw "Simulated Critical Error!"
+    print("You will never see this line.")
+} catch(err) {
+    print(f"Safely caught the error: {err}")
+}
+
+print("")
+print("--- 7. CPU Concurrency (Threading) ---")
+fn threaded_work(thread_id, iterations) {
+    local_sum = 0
+    for i = 0 to iterations {
+        local_sum = local_sum + 1
+    }
+    return local_sum
+}
+
+print("Spawning threads to count independently...")
+t1 = thread.spawn(threaded_work, 1, 500)
+t2 = thread.spawn(threaded_work, 2, 500)
+
+res1 = thread.join(t1)
+res2 = thread.join(t2)
+
+total = res1 + res2
+print(f"Thread 1 counted to {res1}")
+print(f"Thread 2 counted to {res2}")
+print(f"Total concurrent sum: {total}")
+
+print("")
+print("--- 8. Standard Library & Math ---")
+start_time = time.now()
+time.sleep(0.5)
+end_time = time.now()
+
+elapsed = end_time - start_time
+print(f"Slept for approx {elapsed} seconds")
+
+sq = sqrt(144)
+mx = math.max(10, 99)
+print(f"Square root of 144 is {sq}")
+print(f"Max of 10 and 99 is {mx}")
+
+print("")
+print("==========================================")
+print("            ALL TESTS PASSED!             ")
+print("==========================================")

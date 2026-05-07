@@ -3,36 +3,60 @@ use crate::lexer::Token;
 use crate::ast::{Expr, Statement};
 
 pub struct Parser<'a> {
-    lexer: logos::Lexer<'a, Token>, current_token: Option<Token>,
-    current_span: Span, previous_span: Span, source: &'a str,
+    lexer: logos::Lexer<'a, Token>,
+    current_token: Option<Token>,
+    current_span: Span,
+    previous_span: Span,
+    source: &'a str,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(source: &'a str) -> Self {
-        let mut lexer = Token::lexer(source); let current_token = match lexer.next() { Some(Ok(tok)) => Some(tok), _ => None, };
+        let mut lexer = Token::lexer(source);
+        let current_token = match lexer.next() {
+            Some(Ok(tok)) => Some(tok),
+            _ => None,
+        };
         let current_span = lexer.span();
         Self { lexer, current_token, current_span: current_span.clone(), previous_span: current_span, source }
     }
 
     fn error(&self, message: &str, span: Span) -> String {
-        let mut line_num = 1; let mut line_start = 0;
-        for (i, c) in self.source.char_indices() { if i >= span.start { break; } if c == '\n' { line_num += 1; line_start = i + 1; } }
+        let mut line_num = 1;
+        let mut line_start = 0;
+        for (i, c) in self.source.char_indices() {
+            if i >= span.start { break; }
+            if c == '\n' { line_num += 1; line_start = i + 1; }
+        }
         let line_end = self.source[line_start..].find('\n').map(|i| line_start + i).unwrap_or(self.source.len());
-        let col = span.start.saturating_sub(line_start); let span_len = span.end.saturating_sub(span.start).max(1);
+        let col = span.start.saturating_sub(line_start);
+        let span_len = span.end.saturating_sub(span.start).max(1);
         format!("--> Line {}, Column {}\n   |\n{:<2} | {}\n   | {}{}\n   | {}", line_num, col + 1, line_num, &self.source[line_start..line_end], " ".repeat(col), "^".repeat(span_len), message)
     }
 
     fn peek(&self) -> Option<&Token> { self.current_token.as_ref() }
 
     fn advance(&mut self) -> Result<Option<Token>, String> {
-        let token = self.current_token.take(); self.previous_span = self.current_span.clone();
-        if let Some(res) = self.lexer.next() { match res { Ok(tok) => self.current_token = Some(tok), Err(_) => return Err(self.error("Unrecognized character.", self.lexer.span())), } self.current_span = self.lexer.span(); }
+        let token = self.current_token.take();
+        self.previous_span = self.current_span.clone();
+        if let Some(res) = self.lexer.next() {
+            match res {
+                Ok(tok) => self.current_token = Some(tok),
+                Err(_) => return Err(self.error("Unrecognized character.", self.lexer.span())),
+            }
+            self.current_span = self.lexer.span();
+        }
         Ok(token)
     }
 
     fn expect(&mut self, expected: Token) -> Result<(), String> {
-        let span = self.current_span.clone(); let token = self.advance()?;
-        if token != Some(expected.clone()) { let found = token.map(|t| format!("{:?}", t)).unwrap_or_else(|| "EOF".to_string()); return Err(self.error(&format!("Expected {:?}, but found {}", expected, found), span)); } Ok(())
+        let span = self.current_span.clone();
+        let token = self.advance()?;
+        if token != Some(expected.clone()) {
+            let found = token.map(|t| format!("{:?}", t)).unwrap_or_else(|| "EOF".to_string());
+            return Err(self.error(&format!("Expected {:?}, but found {}", expected, found), span));
+        }
+        Ok(())
     }
 
     pub fn parse(&mut self) -> Result<Vec<Statement>, String> {
@@ -46,7 +70,10 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_statement(&mut self) -> Result<Statement, String> {
-        let token = match self.peek() { Some(t) => t.clone(), None => return Err(self.error("Unexpected EOF", self.current_span.clone())), };
+        let token = match self.peek() {
+            Some(t) => t.clone(),
+            None => return Err(self.error("Unexpected EOF", self.current_span.clone())),
+        };
         match token {
             Token::TryKeyword => {
                 self.advance()?; self.expect(Token::LBrace)?; let try_block = self.parse_block()?; self.expect(Token::CatchKeyword)?; self.expect(Token::LParen)?;
@@ -55,28 +82,49 @@ impl<'a> Parser<'a> {
                 Ok(Statement::TryCatch { try_block, error_var, catch_block })
             }
             Token::ThrowKeyword => { self.advance()?; Ok(Statement::Throw { value: self.parse_expr()? }) }
-            Token::ImportKeyword => { self.advance()?; let span = self.current_span.clone(); let module = if let Some(Token::Ident(n)) = self.advance()? { n } else { return Err(self.error("Expected module name", span)); }; Ok(Statement::Import { module }) }
+            Token::ImportKeyword => {
+                self.advance()?; let span = self.current_span.clone();
+                let module = if let Some(Token::Ident(n)) = self.advance()? { n } else { return Err(self.error("Expected module name", span)); };
+                Ok(Statement::Import { module })
+            }
             Token::ClassKeyword => {
-                self.advance()?; let span = self.current_span.clone(); let name = if let Some(Token::Ident(n)) = self.advance()? { n } else { return Err(self.error("Expected class name", span)); };
-                self.expect(Token::LBrace)?; let mut props = Vec::new();
+                self.advance()?; let span = self.current_span.clone();
+                let name = if let Some(Token::Ident(n)) = self.advance()? { n } else { return Err(self.error("Expected class name", span)); };
+                self.expect(Token::LBrace)?; 
+                let mut properties = Vec::new();
+                let mut methods = Vec::new();
                 while self.peek() != Some(&Token::RBrace) {
                     if self.peek() == Some(&Token::Semicolon) { self.advance()?; continue; }
-                    let p_span = self.current_span.clone(); let prop_name = if let Some(Token::Ident(n)) = self.advance()? { n } else { return Err(self.error("Expected property", p_span)); }; self.expect(Token::Assign)?; props.push((Expr::StringLiteral(prop_name), self.parse_expr()?));
-                    if self.peek() == Some(&Token::Semicolon) { self.advance()?; }
+                    if self.peek() == Some(&Token::FnKeyword) {
+                        methods.push(self.parse_statement()?);
+                    } else {
+                        let p_span = self.current_span.clone();
+                        let prop_name = if let Some(Token::Ident(n)) = self.advance()? { n } else { return Err(self.error("Expected property or method", p_span)); };
+                        self.expect(Token::Assign)?;
+                        properties.push((prop_name, self.parse_expr()?));
+                        if self.peek() == Some(&Token::Semicolon) { self.advance()?; }
+                    }
                 }
-                self.expect(Token::RBrace)?; Ok(Statement::FunctionDecl { name, params: vec![], body: vec![ Statement::Return { value: Expr::Dictionary(props) } ] })
+                self.expect(Token::RBrace)?; 
+                Ok(Statement::ClassDecl { name, properties, methods })
             }
             Token::FnKeyword => {
-                self.advance()?; let span = self.current_span.clone(); let name = if let Some(Token::Ident(n)) = self.advance()? { n } else { return Err(self.error("Expected function name", span)); };
+                self.advance()?; let span = self.current_span.clone();
+                let name = if let Some(Token::Ident(n)) = self.advance()? { n } else { return Err(self.error("Expected function name", span)); };
                 self.expect(Token::LParen)?; let mut params = Vec::new();
-                if self.peek() != Some(&Token::RParen) { loop { let p_span = self.current_span.clone(); if let Some(Token::Ident(p)) = self.advance()? { params.push(p); } else { return Err(self.error("Expected parameter", p_span)); } if self.peek() == Some(&Token::Comma) { self.advance()?; } else { break; } } }
+                if self.peek() != Some(&Token::RParen) {
+                    loop {
+                        let p_span = self.current_span.clone();
+                        if let Some(Token::Ident(p)) = self.advance()? { params.push(p); } else { return Err(self.error("Expected parameter", p_span)); }
+                        if self.peek() == Some(&Token::Comma) { self.advance()?; } else { break; }
+                    }
+                }
                 self.expect(Token::RParen)?; self.expect(Token::LBrace)?; Ok(Statement::FunctionDecl { name, params, body: self.parse_block()? })
             }
             Token::ForKeyword => {
                 self.advance()?; let span = self.current_span.clone();
                 let iterator = if let Some(Token::Ident(n)) = self.advance()? { n } else { return Err(self.error("Expected iterator variable name", span)); };
                 let next_tok = self.advance()?;
-
                 if next_tok == Some(Token::Assign) {
                     let start = self.parse_expr()?;
                     if let Some(Token::Ident(n)) = self.advance()? {
@@ -110,28 +158,15 @@ impl<'a> Parser<'a> {
             _ => {
                 let expr = self.parse_expr()?;
                 let is_assign = matches!(self.peek(), Some(Token::Assign | Token::PlusAssign | Token::MinusAssign | Token::StarAssign | Token::SlashAssign | Token::ModuloAssign | Token::PowerAssign));
-
                 if is_assign {
                     let op_tok = self.advance()?.unwrap();
                     let mut value = self.parse_expr()?;
-
                     if op_tok != Token::Assign {
                         let op_str = match op_tok {
-                            Token::PlusAssign => "+",
-                            Token::MinusAssign => "-",
-                            Token::StarAssign => "*",
-                            Token::SlashAssign => "/",
-                            Token::ModuloAssign => "%",
-                            Token::PowerAssign => "**",
-                            _ => unreachable!(),
+                            Token::PlusAssign => "+", Token::MinusAssign => "-", Token::StarAssign => "*", Token::SlashAssign => "/", Token::ModuloAssign => "%", Token::PowerAssign => "**", _ => unreachable!(),
                         };
-                        value = Expr::BinaryOp {
-                            left: Box::new(expr.clone()),
-                            op: op_str.to_string(),
-                            right: Box::new(value),
-                        };
+                        value = Expr::BinaryOp { left: Box::new(expr.clone()), op: op_str.to_string(), right: Box::new(value) };
                     }
-
                     match expr {
                         Expr::Identifier(name) => Ok(Statement::Assignment { name, value }),
                         Expr::IndexAccess { target, index } => Ok(Statement::IndexAssignment { target: *target, index: *index, value }),
@@ -177,7 +212,6 @@ impl<'a> Parser<'a> {
             let op_tok = match self.peek() { Some(tok) => tok.clone(), _ => break };
             if let Some((l_bp, r_bp)) = self.infix_binding_power(&op_tok) {
                 if l_bp < min_bp { break; } self.advance()?; let rhs = self.parse_expr_bp(r_bp)?;
-
                 match op_tok {
                     Token::GtEq => { lhs = Expr::UnaryOp { op: "not".to_string(), right: Box::new(Expr::BinaryOp { left: Box::new(lhs), op: "<".to_string(), right: Box::new(rhs) }) }; }
                     Token::LtEq => { lhs = Expr::UnaryOp { op: "not".to_string(), right: Box::new(Expr::BinaryOp { left: Box::new(lhs), op: ">".to_string(), right: Box::new(rhs) }) }; }
@@ -202,43 +236,97 @@ impl<'a> Parser<'a> {
                 let mut current_expr: Option<Expr> = None; let mut chars = text.chars().peekable(); let mut literal_part = String::new();
                 while let Some(c) = chars.next() {
                     if c == '{' {
-                        if !literal_part.is_empty() { let processed = literal_part.replace("\\n", "\n").replace("\\t", "\t").replace("\\\"", "\"").replace("\\\\", "\\"); let lit_expr = Expr::StringLiteral(processed); current_expr = match current_expr { Some(e) => Some(Expr::BinaryOp { left: Box::new(e), op: "+".to_string(), right: Box::new(lit_expr) }), None => Some(lit_expr), }; literal_part.clear(); }
+                        if !literal_part.is_empty() {
+                            let processed = literal_part.replace("\\n", "\n").replace("\\t", "\t").replace("\\\"", "\"").replace("\\\\", "\\");
+                            let lit_expr = Expr::StringLiteral(processed);
+                            current_expr = match current_expr { Some(e) => Some(Expr::BinaryOp { left: Box::new(e), op: "+".to_string(), right: Box::new(lit_expr) }), None => Some(lit_expr), };
+                            literal_part.clear();
+                        }
                         let mut inner_expr_str = String::new(); while let Some(&next_c) = chars.peek() { if next_c == '}' { chars.next(); break; } inner_expr_str.push(chars.next().unwrap()); }
                         let mut sub_parser = Parser::new(&inner_expr_str); let inner_expr = sub_parser.parse_expr()?;
                         current_expr = match current_expr { Some(e) => Some(Expr::BinaryOp { left: Box::new(e), op: "+".to_string(), right: Box::new(inner_expr) }), None => Some(inner_expr), };
                     } else { literal_part.push(c); }
                 }
-                if !literal_part.is_empty() { let processed = literal_part.replace("\\n", "\n").replace("\\t", "\t").replace("\\\"", "\"").replace("\\\\", "\\"); let lit_expr = Expr::StringLiteral(processed); current_expr = match current_expr { Some(e) => Some(Expr::BinaryOp { left: Box::new(e), op: "+".to_string(), right: Box::new(lit_expr) }), None => Some(lit_expr), }; }
+                if !literal_part.is_empty() {
+                    let processed = literal_part.replace("\\n", "\n").replace("\\t", "\t").replace("\\\"", "\"").replace("\\\\", "\\");
+                    let lit_expr = Expr::StringLiteral(processed);
+                    current_expr = match current_expr { Some(e) => Some(Expr::BinaryOp { left: Box::new(e), op: "+".to_string(), right: Box::new(lit_expr) }), None => Some(lit_expr), };
+                }
                 current_expr.unwrap_or(Expr::StringLiteral("".to_string()))
             }
-            Token::Minus => Expr::UnaryOp { op: "-".to_string(), right: Box::new(self.parse_expr_bp(45)?) }, Token::NotKeyword => Expr::UnaryOp { op: "not".to_string(), right: Box::new(self.parse_expr_bp(15)?) }, Token::Tilde => Expr::UnaryOp { op: "~".to_string(), right: Box::new(self.parse_expr_bp(45)?) }, Token::Ident(name) => Expr::Identifier(name),
+            Token::Minus => Expr::UnaryOp { op: "-".to_string(), right: Box::new(self.parse_expr_bp(45)?) },
+            Token::NotKeyword => Expr::UnaryOp { op: "not".to_string(), right: Box::new(self.parse_expr_bp(15)?) },
+            Token::Tilde => Expr::UnaryOp { op: "~".to_string(), right: Box::new(self.parse_expr_bp(45)?) },
+            Token::Ident(name) => Expr::Identifier(name),
             Token::LParen => { let inner = self.parse_expr()?; self.expect(Token::RParen)?; inner }
-            Token::LBracket => { let mut elements = Vec::new(); if self.peek() != Some(&Token::RBracket) { loop { elements.push(self.parse_expr()?); if self.peek() == Some(&Token::Comma) { self.advance()?; } else { break; } } } self.expect(Token::RBracket)?; Expr::Array(elements) }
-            Token::LBrace => { let mut pairs = Vec::new(); if self.peek() != Some(&Token::RBrace) { loop { let key = self.parse_expr()?; self.expect(Token::Colon)?; let value = self.parse_expr()?; pairs.push((key, value)); if self.peek() == Some(&Token::Comma) { self.advance()?; } else { break; } } } self.expect(Token::RBrace)?; Expr::Dictionary(pairs) }
+            Token::LBracket => {
+                let mut elements = Vec::new();
+                if self.peek() != Some(&Token::RBracket) {
+                    loop {
+                        elements.push(self.parse_expr()?);
+                        if self.peek() == Some(&Token::Comma) { self.advance()?; } else { break; }
+                    }
+                }
+                self.expect(Token::RBracket)?; Expr::Array(elements)
+            }
+            Token::LBrace => {
+                let mut pairs = Vec::new();
+                if self.peek() != Some(&Token::RBrace) {
+                    loop {
+                        let key = self.parse_expr()?; self.expect(Token::Colon)?; let value = self.parse_expr()?; pairs.push((key, value));
+                        if self.peek() == Some(&Token::Comma) { self.advance()?; } else { break; }
+                    }
+                }
+                self.expect(Token::RBrace)?; Expr::Dictionary(pairs)
+            }
             _ => return Err(self.error(&format!("Expected expression, found {:?}", token), span)),
         };
 
         while self.peek() == Some(&Token::LBracket) || self.peek() == Some(&Token::Dot) || self.peek() == Some(&Token::LParen) {
             if self.peek() == Some(&Token::Dot) {
-                self.advance()?; let prop_span = self.current_span.clone(); let prop_name = if let Some(Token::Ident(n)) = self.advance()? { n } else { return Err(self.error("Expected property", prop_span)); };
-                expr = Expr::IndexAccess { target: Box::new(expr), index: Box::new(Expr::StringLiteral(prop_name)) };
+                self.advance()?; let prop_span = self.current_span.clone();
+                let prop_name = if let Some(Token::Ident(n)) = self.advance()? { n } else { return Err(self.error("Expected property or method", prop_span)); };
+                
+                if self.peek() == Some(&Token::LParen) {
+                    self.advance()?;
+                    let mut args = Vec::new();
+                    if self.peek() != Some(&Token::RParen) {
+                        loop {
+                            args.push(self.parse_expr()?);
+                            if self.peek() == Some(&Token::Comma) { self.advance()?; } else { break; }
+                        }
+                    }
+                    self.expect(Token::RParen)?;
+                    expr = Expr::MethodCall { target: Box::new(expr), method: prop_name, args };
+                } else {
+                    expr = Expr::IndexAccess { target: Box::new(expr), index: Box::new(Expr::StringLiteral(prop_name)) };
+                }
             } else if self.peek() == Some(&Token::LParen) {
-                let call_span = self.current_span.clone(); self.advance()?; let mut args = Vec::new(); if self.peek() != Some(&Token::RParen) { loop { args.push(self.parse_expr()?); if self.peek() == Some(&Token::Comma) { self.advance()?; } else { break; } } } self.expect(Token::RParen)?;
-                if let Expr::IndexAccess { target, index } = &expr { if let (Expr::Identifier(obj), Expr::StringLiteral(prop)) = (&**target, &**index) { expr = Expr::FunctionCall { name: format!("{}.{}", obj, prop), args }; continue; } } else if let Expr::Identifier(func_name) = &expr { expr = Expr::FunctionCall { name: func_name.clone(), args }; continue; }
+                let call_span = self.current_span.clone(); self.advance()?; let mut args = Vec::new();
+                if self.peek() != Some(&Token::RParen) {
+                    loop {
+                        args.push(self.parse_expr()?);
+                        if self.peek() == Some(&Token::Comma) { self.advance()?; } else { break; }
+                    }
+                }
+                self.expect(Token::RParen)?;
+                if let Expr::IndexAccess { target, index } = &expr {
+                    if let (Expr::Identifier(obj), Expr::StringLiteral(prop)) = (&**target, &**index) {
+                        expr = Expr::FunctionCall { name: format!("{}.{}", obj, prop), args }; continue;
+                    }
+                } else if let Expr::Identifier(func_name) = &expr {
+                    expr = Expr::FunctionCall { name: func_name.clone(), args }; continue;
+                }
                 return Err(self.error("Dynamic function calls are not supported yet.", call_span));
             } else {
                 self.advance()?; let mut start = None; if self.peek() != Some(&Token::Colon) { start = Some(self.parse_expr()?); }
-
                 if self.peek() == Some(&Token::Colon) {
                     self.advance()?; let mut end = None; if self.peek() != Some(&Token::RBracket) { end = Some(self.parse_expr()?); }
                     self.expect(Token::RBracket)?;
                     expr = Expr::SliceAccess { target: Box::new(expr), start: start.map(Box::new), end: end.map(Box::new) };
                 } else if self.peek() == Some(&Token::Comma) {
                     let mut indices = vec![start.unwrap()];
-                    while self.peek() == Some(&Token::Comma) {
-                        self.advance()?;
-                        indices.push(self.parse_expr()?);
-                    }
+                    while self.peek() == Some(&Token::Comma) { self.advance()?; indices.push(self.parse_expr()?); }
                     self.expect(Token::RBracket)?;
                     expr = Expr::MultiIndexAccess { target: Box::new(expr), indices };
                 } else {
@@ -246,6 +334,7 @@ impl<'a> Parser<'a> {
                     expr = Expr::IndexAccess { target: Box::new(expr), index: Box::new(start.unwrap()) };
                 }
             }
-        } Ok(expr)
+        }
+        Ok(expr)
     }
 }
